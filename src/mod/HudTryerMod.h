@@ -12,6 +12,7 @@ public:
     HudTryerMod() : mSelf(*ll::mod::NativeMod::current()) {}
 
     [[nodiscard]] ll::mod::NativeMod& getSelf() const { return mSelf; }
+    void logInfo(std::string const& message) const;
 
     bool load();
     bool enable();

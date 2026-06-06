@@ -52,11 +52,20 @@ std::string makeRawTextJson(std::string_view text) {
     return "{\"rawtext\":[{\"text\":\"" + escapeForJson(text) + "\"}]}";
 }
 
-void runHudCommand(CommandOrigin const& origin, std::string const& command) {
+std::string quoteSelectorName(std::string_view playerName) {
+    return "\"" + escapeForJson(playerName) + "\"";
+}
+
+void runHudCommand(CommandOrigin const& origin, Player& player, std::string const& command) {
     auto* level = origin.getLevel();
     if (level == nullptr) {
+        hud_tryer::HudTryerMod::getInstance().logInfo("[HUD tryer][WARN] level is null, command skipped");
         return;
     }
+
+    hud_tryer::HudTryerMod::getInstance().logInfo(
+        "[HUD tryer][CMD] target=" + player.getRealName() + " command=" + command
+    );
 
     level->runCommand(
         HashedString(command),
@@ -75,37 +84,51 @@ Player* getPlayerFromOrigin(CommandOrigin const& origin) {
     return static_cast<Player*>(entity); // NOLINT(cppcoreguidelines-pro-type-static-cast-downcast)
 }
 
-void sendTitleTimes(CommandOrigin const& origin) {
-    runHudCommand(origin, "title @s times 10 70 20");
+void sendTitleTimes(CommandOrigin const& origin, Player& player) {
+    runHudCommand(origin, player, "title " + quoteSelectorName(player.getRealName()) + " times 10 793000 20");
 }
 
-void showActionbar(CommandOrigin const& origin) {
+void showActionbar(CommandOrigin const& origin, Player& player) {
     runHudCommand(
         origin,
-        "titleraw @s actionbar " + makeRawTextJson("HUD TRYER\nACTIONBAR\n1234567890\n[] {} <>")
+        player,
+        "titleraw " + quoteSelectorName(player.getRealName()) + " actionbar "
+            + makeRawTextJson("HUD TRYER\nACTIONBAR\n1234567890\n[] {} <>")
     );
 }
 
-void showSubtitle(CommandOrigin const& origin) {
-    sendTitleTimes(origin);
-    runHudCommand(origin, "titleraw @s title " + makeRawTextJson("HUD TRYER"));
+void showSubtitle(CommandOrigin const& origin, Player& player) {
+    sendTitleTimes(origin, player);
     runHudCommand(
         origin,
-        "titleraw @s subtitle " + makeRawTextJson("SUBTITLE\nline-2\nline-3\n[] {} <>")
+        player,
+        "titleraw " + quoteSelectorName(player.getRealName()) + " title " + makeRawTextJson("HUD TRYER")
+    );
+    runHudCommand(
+        origin,
+        player,
+        "titleraw " + quoteSelectorName(player.getRealName()) + " subtitle "
+            + makeRawTextJson("SUBTITLE\nline-2\nline-3\n[] {} <>")
     );
 }
 
-void showTitle(CommandOrigin const& origin) {
-    sendTitleTimes(origin);
+void showTitle(CommandOrigin const& origin, Player& player) {
+    sendTitleTimes(origin, player);
     runHudCommand(
         origin,
-        "titleraw @s title " + makeRawTextJson("HUD TRYER\nTITLE\nline-3\n[] {} <>")
+        player,
+        "titleraw " + quoteSelectorName(player.getRealName()) + " title "
+            + makeRawTextJson("HUD TRYER\nTITLE\nline-3\n[] {} <>")
     );
 }
 
-void clearHud(CommandOrigin const& origin) { runHudCommand(origin, "title @s clear"); }
+void clearHud(CommandOrigin const& origin, Player& player) {
+    runHudCommand(origin, player, "title " + quoteSelectorName(player.getRealName()) + " clear");
+}
 
-void resetHud(CommandOrigin const& origin) { runHudCommand(origin, "title @s reset"); }
+void resetHud(CommandOrigin const& origin, Player& player) {
+    runHudCommand(origin, player, "title " + quoteSelectorName(player.getRealName()) + " reset");
+}
 
 void sendUsage(CommandOutput& output) {
     output.success("Usage: /hudtry <actionbar|subtitle|title|all|clear|reset>");
@@ -129,7 +152,8 @@ void registerHudTryCommand() {
                 return;
             }
 
-            showActionbar(origin);
+            hud_tryer::HudTryerMod::getInstance().logInfo("[HUD tryer] /hudtry actionbar by " + player->getRealName());
+            showActionbar(origin, *player);
             output.success("Sent actionbar test to {}.", player->getRealName());
         });
 
@@ -142,7 +166,8 @@ void registerHudTryCommand() {
                 return;
             }
 
-            showSubtitle(origin);
+            hud_tryer::HudTryerMod::getInstance().logInfo("[HUD tryer] /hudtry subtitle by " + player->getRealName());
+            showSubtitle(origin, *player);
             output.success("Sent subtitle test to {}.", player->getRealName());
         });
 
@@ -153,7 +178,8 @@ void registerHudTryCommand() {
             return;
         }
 
-        showTitle(origin);
+        hud_tryer::HudTryerMod::getInstance().logInfo("[HUD tryer] /hudtry title by " + player->getRealName());
+        showTitle(origin, *player);
         output.success("Sent title test to {}.", player->getRealName());
     });
 
@@ -164,9 +190,10 @@ void registerHudTryCommand() {
             return;
         }
 
-        showActionbar(origin);
-        showSubtitle(origin);
-        showTitle(origin);
+        hud_tryer::HudTryerMod::getInstance().logInfo("[HUD tryer] /hudtry all by " + player->getRealName());
+        showActionbar(origin, *player);
+        showSubtitle(origin, *player);
+        showTitle(origin, *player);
         output.success("Sent all HUD tests to {}.", player->getRealName());
     });
 
@@ -177,7 +204,8 @@ void registerHudTryCommand() {
             return;
         }
 
-        clearHud(origin);
+        hud_tryer::HudTryerMod::getInstance().logInfo("[HUD tryer] /hudtry clear by " + player->getRealName());
+        clearHud(origin, *player);
         output.success("Cleared HUD text for {}.", player->getRealName());
     });
 
@@ -188,7 +216,8 @@ void registerHudTryCommand() {
             return;
         }
 
-        resetHud(origin);
+        hud_tryer::HudTryerMod::getInstance().logInfo("[HUD tryer] /hudtry reset by " + player->getRealName());
+        resetHud(origin, *player);
         output.success("Reset HUD state for {}.", player->getRealName());
     });
 }
@@ -202,19 +231,24 @@ HudTryerMod& HudTryerMod::getInstance() {
     return instance;
 }
 
+void HudTryerMod::logInfo(std::string const& message) const { getSelf().getLogger().info(message); }
+
 bool HudTryerMod::load() {
     getSelf().getLogger().debug("Loading...");
+    logInfo("[HUD tryer] load()");
     return true;
 }
 
 bool HudTryerMod::enable() {
     getSelf().getLogger().debug("Enabling...");
+    logInfo("[HUD tryer] enable() registering /hudtry");
     registerHudTryCommand();
     return true;
 }
 
 bool HudTryerMod::disable() {
     getSelf().getLogger().debug("Disabling...");
+    logInfo("[HUD tryer] disable()");
     return true;
 }
 
