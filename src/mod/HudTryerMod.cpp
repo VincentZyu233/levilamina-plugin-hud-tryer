@@ -34,29 +34,37 @@ std::string sanitizeForLog(std::string text) {
     return text;
 }
 
-void sendHudPacket(Player& player, SetTitlePacketPayload&& payload, std::string const& debugLabel) {
+void sendHudPacket(Player& player, SetTitlePacketPayload::TitleType type, std::string const& debugLabel) {
     auto& mod = hud_tryer::HudTryerMod::getInstance();
     mod.logInfo("[HUD tryer][PKT] target=" + player.getRealName() + " " + debugLabel);
 
-    SetTitlePacket packet(std::move(payload));
+    SetTitlePacket packet(type);
     player.sendNetworkPacket(packet);
 }
 
 void sendTitleTimes(Player& player, int fadeIn, int stay, int fadeOut) {
-    sendHudPacket(
-        player,
-        SetTitlePacketPayload(fadeIn, stay, fadeOut),
-        "type=Times fadeIn=" + std::to_string(fadeIn) + " stay=" + std::to_string(stay)
-            + " fadeOut=" + std::to_string(fadeOut)
+    auto& mod = hud_tryer::HudTryerMod::getInstance();
+    mod.logInfo(
+        "[HUD tryer][PKT] target=" + player.getRealName() + " type=Times fadeIn=" + std::to_string(fadeIn)
+        + " stay=" + std::to_string(stay) + " fadeOut=" + std::to_string(fadeOut)
     );
+
+    sendHudPacket(
+        player, SetTitlePacketPayload::TitleType::Times, "times-control"
+    );
+    SetTitlePacket packet(fadeIn, stay, fadeOut);
+    player.sendNetworkPacket(packet);
 }
 
 void sendHudTextPacket(Player& player, SetTitlePacketPayload::TitleType type, std::string const& text) {
-    sendHudPacket(
-        player,
-        SetTitlePacketPayload(type, text, std::nullopt),
-        "type=" + std::to_string(static_cast<int>(type)) + " text=" + sanitizeForLog(text)
+    auto& mod = hud_tryer::HudTryerMod::getInstance();
+    mod.logInfo(
+        "[HUD tryer][PKT] target=" + player.getRealName() + " type=" + std::to_string(static_cast<int>(type))
+        + " text=" + sanitizeForLog(text)
     );
+
+    SetTitlePacket packet(type, text, std::nullopt);
+    player.sendNetworkPacket(packet);
 }
 
 void showActionbar(Player& player) {
@@ -75,11 +83,11 @@ void showTitle(Player& player) {
 }
 
 void clearHud(Player& player) {
-    sendHudPacket(player, SetTitlePacketPayload(SetTitlePacketPayload::TitleType::Clear), "type=Clear");
+    sendHudPacket(player, SetTitlePacketPayload::TitleType::Clear, "type=Clear");
 }
 
 void resetHud(Player& player) {
-    sendHudPacket(player, SetTitlePacketPayload(SetTitlePacketPayload::TitleType::Reset), "type=Reset");
+    sendHudPacket(player, SetTitlePacketPayload::TitleType::Reset, "type=Reset");
 }
 
 void sendUsage(CommandOutput& output) {
