@@ -1,26 +1,34 @@
-# LeviLamina Mod Template
+# hud-tryer
 
-Mod Template for LeviLamina
+Minimal LeviLamina plugin for testing Bedrock HUD layers:
 
-## Usage
+- `actionbar`
+- `subtitle`
+- `title`
 
-For detailed instructions, see the [LeviLamina Documentation](https://lamina.levimc.org/developer_guides/tutorials/create_your_first_mod/)
+## Commands
 
-1. Generate a new repository from this template
-2. Clone the new repository
-3. Change the mod name and the expected LeviLamina version in `xmake.lua`
-4. Add your code.
-5. Run `xmake f -y -p windows -a x64 -m release` in the root of the repository
-6. Run `xmake` to build the mod.
+- `/hudtry actionbar`
+- `/hudtry subtitle`
+- `/hudtry title`
+- `/hudtry all`
+- `/hudtry clear`
+- `/hudtry reset`
 
-After a successful build, you will find mod in `bin/`
+All commands are player-only. They send intentionally similar multiline content so you can compare:
 
-## Contributing
+- position
+- wrapping
+- background
+- lifetime
+- overlap behavior
 
-Ask questions by creating an issue.
+## Build
 
-PRs accepted.
+This repository already includes GitHub Actions workflows for build and release.
 
-## License
+Local build:
 
-CC0-1.0 © LeviMC(LiteLDev)
+1. `xmake repo -u`
+2. `xmake f -a x64 -m release -p windows --target_type=server -y`
+3. `xmake`
