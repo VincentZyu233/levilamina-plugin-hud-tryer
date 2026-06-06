@@ -1,0 +1,188 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Override version (leave empty to use tooth.json)'
+        required: false
+        default: ''
+      create_release:
+        description: 'Create GitHub Release'
+        type: boolean
+        required: false
+        default: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.flags.outputs.should_build }}
+      should_release: ${{ steps.flags.outputs.should_release }}
+      version: ${{ steps.flags.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Parse flags
+        id: flags
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          VERSION=$(jq -r '.version' tooth.json)
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "📦 Version: $VERSION"
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            echo "should_release=${{ github.event.inputs.create_release }}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          BUILD=false
+          RELEASE=false
+          if echo "$COMMIT_MSG" | grep -qi "build release"; then
+            BUILD=true
+            RELEASE=true
+          elif echo "$COMMIT_MSG" | grep -qi "build action"; then
+            BUILD=true
+          fi
+
+          echo "should_build=$BUILD" >> "$GITHUB_OUTPUT"
+          echo "should_release=$RELEASE" >> "$GITHUB_OUTPUT"
+          echo "📋 Flags: build=$BUILD release=$RELEASE"
+
+  build:
+    name: Build
+    needs: check
+    if: needs.check.outputs.should_build == 'true'
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: latest
+
+      - name: Cache xmake packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}/.xmake/packages
+            ~/AppData/Local/.xmake/packages
+          key: ${{ runner.os }}-xmake-${{ hashFiles('xmake.lua') }}
+          restore-keys: |
+            ${{ runner.os }}-xmake-
+
+      - name: Update xmake repositories
+        run: xmake repo -u
+
+      - name: Configure
+        run: xmake f -y -p windows -a x64 -m release --target_type=server
+
+      - name: Build
+        run: xmake
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hud-tryer-${{ needs.check.outputs.version }}-windows-x64
+          path: bin/hud-tryer/
+          retention-days: 30
+
+  release:
+    name: Release to GitHub
+    needs: [check, build]
+    if: needs.check.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: hud-tryer-${{ needs.check.outputs.version }}-windows-x64
+          path: build-output
+
+      - name: Prepare release zip
+        run: |
+          mkdir -p release/hud-tryer
+          cp -r build-output/* release/hud-tryer/
+          cd release
+          zip -r "../hud-tryer-server-windows-x64.zip" .
+
+      - name: Delete existing release & tag (force fresh)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="v${{ needs.check.outputs.version }}"
+          echo "🗑️ Cleaning up existing release/tag: $VERSION"
+          gh release delete "$VERSION" --yes --cleanup-tag 2>/dev/null || echo "No existing release to delete"
+          sleep 3
+
+      - name: Generate release notes from template
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          PREV_TAG=$(git tag --sort=-v:refname | grep -v "^v${VERSION}$" | head -1)
+
+          if [ -n "$PREV_TAG" ]; then
+            COMMIT_LOG=$(git log "${PREV_TAG}..HEAD" --format="%B" --reverse | sed 's/^/> /')
+          else
+            COMMIT_LOG=$(git log --format="%B" --reverse | sed 's/^/> /')
+          fi
+
+          export REPO VERSION COMMIT_LOG
+          export BASE_URL="https://github.com/${REPO}/releases/download/v${VERSION}"
+          export BUILD_DATE="$(date -u '+%Y-%m-%d %H:%M UTC')"
+          export COMMIT_HASH="[\`${GITHUB_SHA::7}\`](https://github.com/${REPO}/commit/${GITHUB_SHA})"
+          export CHANGELOG_URL="https://github.com/${REPO}/compare/${PREV_TAG:-v${VERSION}}...v${VERSION}"
+
+          python3 .github/scripts/generate_release_notes.py
+
+          echo "📝 Generated release notes:"
+          cat release_notes.md
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="v${{ needs.check.outputs.version }}"
+          gh release create "$VERSION" \
+            --title "hud-tryer ${VERSION}" \
+            --notes-file release_notes.md \
+            --latest \
+            hud-tryer-server-windows-x64.zip \
+            tooth.json
