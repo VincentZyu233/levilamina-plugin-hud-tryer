@@ -34,7 +34,7 @@ std::string sanitizeForLog(std::string text) {
     return text;
 }
 
-void sendHudPacket(Player& player, SetTitlePacketPayload payload, std::string const& debugLabel) {
+void sendHudPacket(Player& player, SetTitlePacketPayload&& payload, std::string const& debugLabel) {
     auto& mod = hud_tryer::HudTryerMod::getInstance();
     mod.logInfo("[HUD tryer][PKT] target=" + player.getRealName() + " " + debugLabel);
 
