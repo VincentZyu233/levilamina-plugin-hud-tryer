@@ -1,4 +1,4 @@
-#include "mod/MyMod.h"
+#include "mod/HudTryerMod.h"
 
 #include "ll/api/command/CommandHandle.h"
 #include "ll/api/command/CommandRegistrar.h"
@@ -8,6 +8,7 @@
 #include "mc/server/commands/CommandOrigin.h"
 #include "mc/server/commands/CommandOutput.h"
 #include "mc/server/commands/CommandPermissionLevel.h"
+#include "mc/server/commands/CurrentCmdVersion.h"
 #include "mc/world/actor/Actor.h"
 #include "mc/world/actor/player/Player.h"
 #include "mc/world/level/CommandOriginSystem.h"
@@ -57,11 +58,11 @@ void runHudCommand(CommandOrigin const& origin, std::string const& command) {
         return;
     }
 
-    level->asServer().runCommand(
+    level->runCommand(
         HashedString(command),
         const_cast<CommandOrigin&>(origin),
-        CommandOriginSystem::CurrentEntity,
-        CurrentCmdVersion::CurrentVersion()
+        CommandOriginSystem::ActorEventCommandSystem,
+        CurrentCmdVersion::Latest
     );
 }
 
@@ -196,27 +197,27 @@ void registerHudTryCommand() {
 
 namespace hud_tryer {
 
-MyMod& MyMod::getInstance() {
-    static MyMod instance;
+HudTryerMod& HudTryerMod::getInstance() {
+    static HudTryerMod instance;
     return instance;
 }
 
-bool MyMod::load() {
+bool HudTryerMod::load() {
     getSelf().getLogger().debug("Loading...");
     return true;
 }
 
-bool MyMod::enable() {
+bool HudTryerMod::enable() {
     getSelf().getLogger().debug("Enabling...");
     registerHudTryCommand();
     return true;
 }
 
-bool MyMod::disable() {
+bool HudTryerMod::disable() {
     getSelf().getLogger().debug("Disabling...");
     return true;
 }
 
 } // namespace hud_tryer
 
-LL_REGISTER_MOD(hud_tryer::MyMod, hud_tryer::MyMod::getInstance());
+LL_REGISTER_MOD(hud_tryer::HudTryerMod, hud_tryer::HudTryerMod::getInstance());
