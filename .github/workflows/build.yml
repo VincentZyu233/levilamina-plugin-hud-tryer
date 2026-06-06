@@ -158,10 +158,27 @@ jobs:
         run: |
           PREV_TAG=$(git tag --sort=-v:refname | grep -v "^v${VERSION}$" | head -1)
 
+          collect_changelog() {
+            local range_args=("$@")
+            git log "${range_args[@]}" --pretty=format:'%s|%h|%an|%ad' --date=format:'%m-%d %H:%M' --reverse \
+              | grep -Evi '^chore: trigger release; build release\|' \
+              | awk -F'|' '{
+                  subj=$1
+                  if (length(subj) > 88) subj=substr(subj, 1, 85) "..."
+                  print subj " (`" $2 "`) - @" $3 " [" $4 "]"
+                }'
+          }
+
           if [ -n "$PREV_TAG" ]; then
-            COMMIT_LOG=$(git log "${PREV_TAG}..HEAD" --format="%B" --reverse | sed 's/^/> /')
+            collect_changelog "${PREV_TAG}..HEAD" > changelog_raw.txt
           else
-            COMMIT_LOG=$(git log --format="%B" --reverse | sed 's/^/> /')
+            collect_changelog > changelog_raw.txt
+          fi
+
+          if [ -s changelog_raw.txt ]; then
+            COMMIT_LOG=$(sed 's/^/> /; G' changelog_raw.txt)
+          else
+            COMMIT_LOG='> No changelog entries.'
           fi
 
           export REPO VERSION COMMIT_LOG
